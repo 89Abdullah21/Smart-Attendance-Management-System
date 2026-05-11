@@ -6,7 +6,7 @@ Group Members: Abdullah (SOLO)
 The objective of this proposal is to present a database-focused Smart Attendance Management System that helps educational institutions record, store, and analyze attendance in a secure, accurate, and automated way.
 This proposal explains why the system is needed, what problems it solves, and how a well-designed database will support features like timetables, attendance logs, reports, and verification (time + location).
 
-# Introduction and Background
+# Introduction & Background
 Traditional methods (manual roll-call or paper registers) create multiple issues: they take time, can be inaccurate, and are hard to manage when records grow large. With modern web technologies and database systems, attendance can be handled through a centralized system that provides fast access, better accuracy, and long-term record management.
 
 # Problem Statement
