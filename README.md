@@ -1,6 +1,6 @@
 # Smart Attendance Management System - Project Proposal
 
-Group Members: Abdullah
+Group Members: Abdullah (SOLO)
 
 # Objective of the Proposal
 The objective of this proposal is to present a database-focused Smart Attendance Management System that helps educational institutions record, store, and analyze attendance in a secure, accurate, and automated way.
