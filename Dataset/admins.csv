@@ -1,0 +1,3 @@
+admin_id,full_name,email,password_hash,created_at
+1,Kristina Levy,pjohnston@example.net,f32063ff140a4562f8ddc0affa8cd83c321b4aa86893cf943ab922c4c2ecb5bf,2026-03-15 20:22:15
+2,Mike Frank,kellytaylor@example.net,fd6e19ddffe5174a30b862bb693738c0e7e8fb7b54039dea67b4f4ea3884e714,2026-03-07 00:44:27

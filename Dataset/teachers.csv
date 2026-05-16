@@ -1,0 +1,11 @@
+teacher_id,full_name,email,password_hash,department,created_at
+1,Alan Rosales,jamesnewman@example.org,9bc45603e869d4895d306d7f1f1ab7fd3f47889bd85f473b56cf9a5e6f6dd39c,Cyber Security,1/13/2026 17:27
+2,Stephen Davis,blakejones@example.com,fdeb0c38708fd42758209a6b00e4d02a0fec2bdfaabd58894a60667b32cdc842,Computer Science,1/27/2026 19:39
+3,Angela Howard,emilyball@example.org,4a5e9e53d95f235751a00a73f74c1b8e3194316c0f99f99f0b084a1b00e64bdc,Software Engineering,2/26/2026 4:54
+4,Kenneth Allen,tkent@example.net,57edd3f0b2938fba63f42bfe49afe18522596fee18513916d5cd2ba963d09d6f,Software Engineering,1/27/2026 7:26
+5,Lawrence Martinez,jamesdavid@example.net,c14376687eb4b76945187ef3abcb114e55fbdb84c463f8561b868a89f01c6d83,Cyber Security,1/17/2026 14:06
+6,Rachael Bennett,julia31@example.org,d7061e8941bf088d74ae931f1ecab9c6bdd3dad8a7a872066efa58692c864a17,AI,5/6/2026 16:24
+7,John Phillips,meganburns@example.net,7372095c79ecf08297ac73d2d9d563e7616f5ed17f016323f4dff07a1894df03,Computer Science,2/3/2026 8:13
+8,Jacqueline Stuart,donnaparker@example.net,0e7dc043ac8395865786fa4ba7faedb5e025a578c533d4803fd4712fb973231c,AI,1/13/2026 10:44
+9,Christine Preston,charlesadams@example.net,26df36a94c40ee6a4ac47200b45dab4591c508d2576a00f71bf83d7abe7df04b,Cyber Security,4/4/2026 9:01
+10,Robert Noble,bturner@example.com,e0fd9ce2e83e36084f6f734abcf690af2f865912554580e97d4c6930626f2baf,Software Engineering,4/26/2026 4:37
