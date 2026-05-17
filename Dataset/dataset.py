@@ -26,7 +26,7 @@ for i in range(1, NUM_ADMINS + 1):
         "full_name": fake.name(),
         "email": fake.unique.email(),
         "password_hash": fake.sha256(),
-        "created_at": fake.date_time_this_year()
+        "created_at": fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S')
     })
 
 admins_df = pd.DataFrame(admins)
@@ -50,7 +50,7 @@ for i in range(1, NUM_TEACHERS + 1):
         "email": fake.unique.email(),
         "password_hash": fake.sha256(),
         "department": random.choice(departments),
-        "created_at": fake.date_time_this_year()
+        "created_at": fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S')
     })
 
 teachers_df = pd.DataFrame(teachers)
@@ -71,7 +71,7 @@ for i in range(1, NUM_STUDENTS + 1):
         "roll_number": f"2022-SE-{1000+i}",
         "section": random.choice(sections),
         "semester": random.randint(1, 8),
-        "created_at": fake.date_time_this_year()
+        "created_at": fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S')
     })
 
 students_df = pd.DataFrame(students)
@@ -125,7 +125,7 @@ enrollments_df = pd.DataFrame(enrollments)
 # -----------------------------
 # TIMETABLE TABLE
 # -----------------------------
-days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
 timetable = []
 
@@ -163,11 +163,11 @@ for i in range(1, NUM_ATTENDANCE + 1):
         "slot_id": slot,
         "course_id": random.randint(1, NUM_COURSES),
         "class_date": fake.date_this_year(),
-        "marked_at": fake.date_time_this_year(),
+        "marked_at": fake.date_time_this_year().strftime('%Y-%m-%d %H:%M:%S'),
         "status": random.choice(attendance_status),
         "latitude_marked": round(random.uniform(33.5, 34.5), 6),
         "longitude_marked": round(random.uniform(71.0, 72.0), 6),
-        "is_location_valid": random.choice([True, False])
+        "is_location_valid": random.choice([0, 1])
     })
 
 attendance_df = pd.DataFrame(attendance)
