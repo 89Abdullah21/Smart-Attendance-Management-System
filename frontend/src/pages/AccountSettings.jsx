@@ -1,0 +1,285 @@
+import { useEffect, useState } from 'react';
+import { User, Mail, Lock, BookOpen, Hash, Layers, ShieldCheck, Save, Sparkles } from 'lucide-react';
+import PageWrapper from '../components/layout/PageWrapper';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { useAuth } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
+
+export default function AccountSettings() {
+  const { user, updateSettings } = useAuth();
+  const { push } = useNotification();
+
+  const [form, setForm] = useState({
+    full_name: user?.full_name || '',
+    email: user?.email || '',
+    password: '',
+    confirmPassword: '',
+    roll_number: user?.roll_number || '',
+    section: user?.section || '',
+    semester: user?.semester || '',
+    department: user?.department || '',
+  });
+
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setForm((prev) => ({
+      ...prev,
+      full_name: user.full_name || '',
+      email: user.email || '',
+      roll_number: user.roll_number || '',
+      section: user.section || '',
+      semester: user.semester || '',
+      department: user.department || '',
+    }));
+  }, [user]);
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const validate = () => {
+    const e = {};
+    if (!form.full_name.trim()) e.full_name = 'Full name is required';
+    if (!form.email.trim()) e.email = 'Email is required';
+    if (form.password) {
+      if (form.password.length < 8) {
+        e.password = 'Password must be at least 8 characters';
+      }
+      if (form.password !== form.confirmPassword) {
+        e.confirmPassword = 'Passwords do not match';
+      }
+    }
+    if (user?.role === 'student') {
+      if (!form.roll_number.trim()) e.roll_number = 'Roll number is required';
+      if (!form.section.trim()) e.section = 'Section is required';
+      if (!form.semester) e.semester = 'Semester is required';
+      if (!form.department.trim()) e.department = 'Department/Program is required';
+    }
+    if (user?.role === 'teacher') {
+      if (!form.department.trim()) e.department = 'Department is required';
+    }
+    return e;
+  };
+
+  const handleSubmit = async (ev) => {
+    ev.preventDefault();
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setErrors({});
+    setLoading(true);
+
+    try {
+      const payload = {
+        full_name: form.full_name,
+        email: form.email,
+        roll_number: form.roll_number,
+        section: form.section,
+        semester: form.semester,
+        department: form.department,
+      };
+
+      if (form.password.trim() !== '') {
+        payload.password = form.password;
+      }
+
+      await updateSettings(payload);
+      push('success', 'Account settings updated successfully!');
+      
+      // Clear password fields
+      setForm(prev => ({
+        ...prev,
+        password: '',
+        confirmPassword: ''
+      }));
+    } catch (err) {
+      push('error', err.message || 'Failed to update settings.');
+      setErrors({ form: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRoleBadgeColor = () => {
+    switch (user?.role) {
+      case 'admin': return 'from-rose-500 to-red-600';
+      case 'teacher': return 'from-violet-500 to-indigo-600';
+      default: return 'from-blue-500 to-sky-600';
+    }
+  };
+
+  return (
+    <PageWrapper title="Account Settings">
+      <div className="max-w-3xl mx-auto space-y-6">
+        
+        {/* User Identity Premium Banner */}
+        <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${getRoleBadgeColor()} p-6 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-xl font-bold border border-white/30 uppercase">
+              {user?.avatar_initials || user?.full_name?.substring(0, 2)}
+            </div>
+            <div>
+              <h2 className="text-xl font-extrabold flex items-center gap-1.5 leading-tight">
+                {user?.full_name}
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+              </h2>
+              <p className="text-xs text-white/80 font-mono mt-0.5">{user?.email}</p>
+            </div>
+          </div>
+          
+          <div className="relative z-10">
+            <span className="bg-white/20 backdrop-blur-md text-white border border-white/30 text-[10px] font-extrabold uppercase px-3 py-1.5 rounded-full tracking-wider shadow-sm">
+              {user?.role} Portal
+            </span>
+          </div>
+          
+          {/* Subtle background abstract shapes */}
+          <div className="absolute right-0 top-0 w-48 h-48 bg-white/5 rounded-full -mr-8 -mt-8 blur-lg" />
+        </div>
+
+        <Card>
+          <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
+            
+            {/* Form general feedback */}
+            {errors.form && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{errors.form}</p>
+            )}
+
+            {/* Profile Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                <User className="w-4 h-4 text-indigo-500" />
+                Profile Information
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  id="sett-name"
+                  label="Full Name"
+                  type="text"
+                  value={form.full_name}
+                  onChange={set('full_name')}
+                  error={errors.full_name}
+                  leftIcon={<User className="w-4 h-4" />}
+                />
+                <Input
+                  id="sett-email"
+                  label="Email Address"
+                  type="email"
+                  value={form.email}
+                  onChange={set('email')}
+                  error={errors.email}
+                  leftIcon={<Mail className="w-4 h-4" />}
+                />
+              </div>
+            </div>
+
+            {/* Role Specific Fields */}
+            {(user?.role === 'student' || user?.role === 'teacher') && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <Layers className="w-4 h-4 text-indigo-500" />
+                  Academic Scopes
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {user?.role === 'student' && (
+                    <>
+                      <Input
+                        id="sett-roll"
+                        label="Roll Number"
+                        type="text"
+                        value={form.roll_number}
+                        onChange={set('roll_number')}
+                        error={errors.roll_number}
+                        leftIcon={<Hash className="w-4 h-4" />}
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input
+                          id="sett-sec"
+                          label="Section"
+                          type="text"
+                          value={form.section}
+                          onChange={set('section')}
+                          error={errors.section}
+                        />
+                        <Input
+                          id="sett-sem"
+                          label="Semester"
+                          type="number"
+                          value={form.semester}
+                          onChange={set('semester')}
+                          error={errors.semester}
+                          min={1}
+                          max={8}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <Input
+                    id="sett-dept"
+                    label={user?.role === 'student' ? 'Department / Program' : 'Department'}
+                    type="text"
+                    placeholder="e.g. Computer Science"
+                    value={form.department}
+                    onChange={set('department')}
+                    error={errors.department}
+                    leftIcon={<BookOpen className="w-4 h-4" />}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Password Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                <Lock className="w-4 h-4 text-indigo-500" />
+                Change Password (Optional)
+              </h3>
+              <p className="text-xs text-slate-400 -mt-2">Leave blank if you do not want to change your password.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  id="sett-pass"
+                  label="New Password"
+                  type="password"
+                  placeholder="Min 8 characters"
+                  value={form.password}
+                  onChange={set('password')}
+                  error={errors.password}
+                  leftIcon={<Lock className="w-4 h-4" />}
+                />
+                <Input
+                  id="sett-conf"
+                  label="Confirm Password"
+                  type="password"
+                  placeholder="Repeat new password"
+                  value={form.confirmPassword}
+                  onChange={set('confirmPassword')}
+                  error={errors.confirmPassword}
+                  leftIcon={<ShieldCheck className="w-4 h-4" />}
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button
+                id="settings-save-btn"
+                type="submit"
+                loading={loading}
+                leftIcon={<Save className="w-4 h-4" />}
+              >
+                Save Settings
+              </Button>
+            </div>
+
+          </form>
+        </Card>
+      </div>
+    </PageWrapper>
+  );
+}

@@ -7,6 +7,30 @@ const { authenticateToken } = require('../middleware/auth');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secure_jwt_secret_token_key_generation_phrase_here';
 
+// Helper to automatically assign student to courses matching their department, semester, and section
+async function syncStudentEnrollments(studentId, department, semester, section) {
+  if (!department || !semester || !section) return;
+  try {
+    // Get all courses that match this student's department, semester, and section
+    const [matchingCourses] = await db.query(
+      'SELECT course_id FROM courses WHERE LOWER(department) = LOWER(?) AND semester = ? AND LOWER(section) = LOWER(?)',
+      [department, Number(semester), section]
+    );
+    
+    if (matchingCourses.length === 0) return;
+    
+    // Enroll the student in these courses
+    for (const c of matchingCourses) {
+      await db.query(
+        'INSERT INTO enrollments (student_id, course_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE enrollment_id=enrollment_id',
+        [studentId, c.course_id]
+      );
+    }
+  } catch (err) {
+    console.error('Error syncing student enrollments:', err);
+  }
+}
+
 // ── 1. REGISTRATION ENDPOINT ────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   const { full_name, email, password, role, roll_number, section, semester, department } = req.body;
@@ -46,11 +70,16 @@ router.post('/register', async (req, res) => {
       role === 'student' ? roll_number : null,
       role === 'student' ? section : null,
       role === 'student' ? Number(semester) : null,
-      role === 'teacher' ? department : null
+      (role === 'teacher' || role === 'student') ? department : null
     ];
 
     const [insertResult] = await db.query(insertQuery, values);
     const newUserId = insertResult.insertId;
+
+    // Automatically sync student enrollments if student
+    if (role === 'student' && department && semester && section) {
+      await syncStudentEnrollments(newUserId, department, Number(semester), section);
+    }
 
     // Fetch the newly created user
     const [rows] = await db.query(
@@ -139,6 +168,95 @@ router.get('/profile', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Profile Fetch Error:', err);
     res.status(500).json({ message: 'Server error retrieving user credentials.' });
+  }
+});
+
+// ── 3.5 UPDATE SETTINGS ENDPOINT ─────────────────────────────────────────────
+router.put('/settings', authenticateToken, async (req, res) => {
+  const { full_name, email, password, roll_number, section, semester, department } = req.body;
+  const userId = req.user.id;
+  const role = req.user.role;
+
+  try {
+    // Check if the user exists
+    const [userRows] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    const currentUser = userRows[0];
+
+    // Check email uniqueness if email is changed
+    if (email && email.toLowerCase() !== currentUser.email.toLowerCase()) {
+      const [emailCheck] = await db.query('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
+      if (emailCheck.length > 0) {
+        return res.status(400).json({ message: 'Email is already taken.' });
+      }
+    }
+
+    // Check roll number uniqueness if roll number is changed
+    if (role === 'student' && roll_number && roll_number !== currentUser.roll_number) {
+      const [rollCheck] = await db.query('SELECT * FROM users WHERE roll_number = ?', [roll_number]);
+      if (rollCheck.length > 0) {
+        return res.status(400).json({ message: 'Roll number is already registered.' });
+      }
+    }
+
+    let passwordHash = currentUser.password_hash;
+    if (password && password.trim() !== '') {
+      if (password.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters long.' });
+      }
+      const salt = await bcrypt.genSalt(10);
+      passwordHash = await bcrypt.hash(password, salt);
+    }
+
+    const updateQuery = `
+      UPDATE users SET 
+        full_name = ?,
+        email = ?,
+        password_hash = ?,
+        roll_number = ?,
+        section = ?,
+        semester = ?,
+        department = ?
+      WHERE id = ?
+    `;
+
+    const values = [
+      full_name || currentUser.full_name,
+      email ? email.toLowerCase() : currentUser.email,
+      passwordHash,
+      role === 'student' ? (roll_number || currentUser.roll_number) : null,
+      role === 'student' ? (section || currentUser.section) : null,
+      role === 'student' ? (semester !== undefined ? Number(semester) : currentUser.semester) : null,
+      (role === 'teacher' || role === 'student') ? (department || currentUser.department) : null,
+      userId
+    ];
+
+    await db.query(updateQuery, values);
+
+    // If student, sync enrollments based on new class info
+    const finalDept = (role === 'student' || role === 'teacher') ? (department || currentUser.department) : null;
+    const finalSem = role === 'student' ? (semester !== undefined ? Number(semester) : currentUser.semester) : null;
+    const finalSec = role === 'student' ? (section || currentUser.section) : null;
+    if (role === 'student' && finalDept && finalSem && finalSec) {
+      await syncStudentEnrollments(userId, finalDept, finalSem, finalSec);
+    }
+
+    // Fetch updated user profile
+    const [rows] = await db.query(
+      'SELECT id, full_name, email, role, roll_number, section, semester, department, created_at FROM users WHERE id = ?',
+      [userId]
+    );
+
+    res.json({
+      user: rows[0],
+      message: 'Account settings updated successfully!'
+    });
+
+  } catch (err) {
+    console.error('Settings Update Error:', err);
+    res.status(500).json({ message: 'Server error updating settings.' });
   }
 });
 

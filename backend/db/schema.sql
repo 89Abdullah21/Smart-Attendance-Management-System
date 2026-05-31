@@ -48,11 +48,28 @@ CREATE TABLE courses (
     course_name  VARCHAR(100) NOT NULL,
     credit_hours INT NOT NULL CHECK (credit_hours > 0),
     teacher_id   INT NOT NULL,
+    department   VARCHAR(100) DEFAULT NULL,
+    semester     INT DEFAULT NULL,
+    section      VARCHAR(10) DEFAULT NULL,
 
     CONSTRAINT fk_course_teacher
         FOREIGN KEY (teacher_id) REFERENCES users(id)
         ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── 2b. COURSE TEACHERS TABLE (Many-to-Many: co-teachers → courses) ─────────────
+CREATE TABLE course_teachers (
+    course_id  INT NOT NULL,
+    teacher_id INT NOT NULL,
+    PRIMARY KEY (course_id, teacher_id),
+    CONSTRAINT fk_course_teachers_course
+        FOREIGN KEY (course_id) REFERENCES courses(course_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_course_teachers_teacher
+        FOREIGN KEY (teacher_id) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- ── 3. ENROLLMENTS TABLE (Many-to-Many: students → courses) ──────────────────
 CREATE TABLE enrollments (

@@ -30,6 +30,9 @@ import ReportsExportStudio from './pages/teacher/ReportsExportStudio';
 // ── Admin pages ────────────────────────────────────────────────────────────
 import AdminPanel from './pages/admin/AdminPanel';
 
+// ── Shared pages ───────────────────────────────────────────────────────────
+import AccountSettings from './pages/AccountSettings';
+
 // ── Route Guards ───────────────────────────────────────────────────────────
 
 /** Redirect to /login if not authenticated. */
@@ -109,6 +112,9 @@ export default function App() {
                   <Route element={<RequireAuth allowedRoles={['admin']} />}>
                     <Route path="/admin" element={<AdminPanel />} />
                   </Route>
+
+                  {/* Shared/Common routes */}
+                  <Route path="/settings" element={<AccountSettings />} />
 
                 </Route>
               </Route>

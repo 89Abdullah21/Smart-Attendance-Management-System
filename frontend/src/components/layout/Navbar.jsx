@@ -169,14 +169,15 @@ function UserMenu() {
 
           {/* Menu items */}
           <div className="py-1">
-            <button
+            <Link
+              to="/settings"
               id="navbar-settings-btn"
               className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
               onClick={() => setOpen(false)}
             >
               <Settings className="w-4 h-4" />
               Account Settings
-            </button>
+            </Link>
             <hr className="my-1 border-slate-100" />
             <button
               id="navbar-logout-btn"

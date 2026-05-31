@@ -25,6 +25,12 @@ const NAV = {
       icon:  CalendarDays,
       id:    'sidebar-nav-timetable',
     },
+    {
+      to:    '/settings',
+      label: 'Settings',
+      icon:  Settings,
+      id:    'sidebar-nav-settings',
+    },
   ],
   teacher: [
     {
@@ -57,6 +63,12 @@ const NAV = {
       icon:  FileText,
       id:    'sidebar-nav-export-studio',
     },
+    {
+      to:    '/settings',
+      label: 'Settings',
+      icon:  Settings,
+      id:    'sidebar-nav-settings',
+    },
   ],
   admin: [
     {
@@ -66,7 +78,7 @@ const NAV = {
       id:    'sidebar-nav-admin',
     },
     {
-      to:    '/admin',
+      to:    '/settings',
       label: 'Settings',
       icon:  Settings,
       id:    'sidebar-nav-settings',

@@ -1,12 +1,15 @@
-import { LayoutDashboard, BookOpen, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, BookOpen, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import PageWrapper from '../../components/layout/PageWrapper';
 import StatCard from '../../components/data-display/StatCard';
 import AttendanceTable from '../../components/data-display/AttendanceTable';
+import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import { useFetch } from '../../hooks/useFetch';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import { summarizeAttendance } from '../../utils/attendanceCalc';
+import { buildCsv, downloadBlob } from '../../utils/exportUtils';
 
 /**
  * StudentDashboard — /student/dashboard
@@ -14,6 +17,7 @@ import { summarizeAttendance } from '../../utils/attendanceCalc';
  */
 export default function StudentDashboard() {
   const { user, getMySlots, getMyCourses, DEV_MODE } = useAuth();
+  const { push } = useNotification();
 
   // Try loading live production data from API endpoints
   const { data: summary,   isLoading: sumLoading }  = useFetch('/student/attendance/summary');
@@ -50,12 +54,46 @@ export default function StudentDashboard() {
   const warnings           = displaySummaryRows.filter((r) => r.atRisk);
   const displayRecentHistory = useLocalSeeds ? localHistory : (history?.slice(0, 10) ?? []);
   const displayTodayClasses  = useLocalSeeds ? localTodaySlots : (today ?? []);
+
+  const handleDownloadAttendance = () => {
+    const rows = useLocalSeeds ? localHistory : (history ?? []);
+    if (!rows.length) {
+      push('warning', 'No attendance records to export yet.');
+      return;
+    }
+    const headers = ['Date', 'Course', 'Status', 'Room', 'Marked At'];
+    const bodyRows = rows.map((r) => ([
+      r.class_date,
+      r.course_name,
+      r.status,
+      r.room_location,
+      r.marked_at || '',
+    ]));
+    const csv = buildCsv(headers, bodyRows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const fileName = `attendance-${user?.roll_number || user?.id || 'student'}.csv`;
+    downloadBlob(blob, fileName);
+    push('success', 'Attendance export downloaded.');
+  };
   
   // Only trigger structural spinner if dev mode is off and files are loading
   const isLoading = !DEV_MODE && (sumLoading || histLoading || todayLoading);
 
   return (
-    <PageWrapper title="My Dashboard">
+    <PageWrapper
+      title="My Dashboard"
+      actions={
+        <Button
+          id="student-download-attendance-btn"
+          variant="secondary"
+          size="sm"
+          leftIcon={<Download className="w-4 h-4" />}
+          onClick={handleDownloadAttendance}
+        >
+          Download Attendance
+        </Button>
+      }
+    >
       {isLoading ? <Spinner label="Loading dashboard…" /> : (
         <div className="space-y-6">
 

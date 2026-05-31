@@ -9,6 +9,8 @@ import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import { useFetch } from '../../hooks/useFetch';
+import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import { formatTime, todayISO } from '../../utils/dateHelpers';
 
 /**
@@ -34,8 +36,12 @@ export default function TeacherRoster() {
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [auditOpen, setAuditOpen]       = useState(false);
   const [auditTarget, setAuditTarget]   = useState(null);
+  const [marking, setMarking]           = useState(false);
 
-  const { data: roster, isLoading } = useFetch(
+  const { token } = useAuth();
+  const { push } = useNotification();
+
+  const { data: roster, isLoading, refetch } = useFetch(
     `/teacher/roster/${courseId}?date=${classDate}`
   );
   const { data: auditLog } = useFetch(
@@ -71,6 +77,38 @@ export default function TeacherRoster() {
 
   const openAudit = (row) => { setAuditTarget(row); setAuditOpen(true); };
 
+  const handleMarkAbsent = async () => {
+    if (selectedRows.size === 0 || marking) return;
+    setMarking(true);
+    try {
+      const res = await fetch('/api/teacher/attendance/mark-manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          course_id: Number(courseId),
+          student_ids: Array.from(selectedRows),
+          status: 'Absent',
+          class_date: classDate,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || 'Failed to mark absences.');
+      }
+      const body = await res.json().catch(() => ({}));
+      push('success', body.message || `Marked ${selectedRows.size} students absent.`);
+      setSelectedRows(new Set());
+      refetch();
+    } catch (err) {
+      push('error', err.message || 'Failed to mark absences.');
+    } finally {
+      setMarking(false);
+    }
+  };
+
   const SortTh = ({ label, sortKey }) => (
     <th
       className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer select-none hover:text-indigo-600"
@@ -95,7 +133,13 @@ export default function TeacherRoster() {
           />
           <FilterBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
           {selectedRows.size > 0 && (
-            <Button id="roster-bulk-absent-btn" variant="danger" size="sm">
+            <Button
+              id="roster-bulk-absent-btn"
+              variant="danger"
+              size="sm"
+              loading={marking}
+              onClick={handleMarkAbsent}
+            >
               Mark {selectedRows.size} Absent
             </Button>
           )}

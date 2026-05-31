@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { buildCsv, createSimplePdf, downloadBlob } from '../../utils/exportUtils';
 
 /**
  * ReportsExportStudio — /teacher/reports/export
@@ -100,10 +101,50 @@ export default function ReportsExportStudio() {
   };
 
   const handleExport = (format) => {
-    push('success', `Generating ${format.toUpperCase()} export file for ${activeCourse?.course_name || 'Course'}...`);
-    setTimeout(() => {
-      push('success', `Download complete! ${filteredRows.length} student records exported safely.`);
-    }, 1500);
+    if (!filteredRows.length) {
+      push('warning', 'No matching records to export.');
+      return;
+    }
+    const safeCourse = (activeCourse?.course_name || 'course')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/(^-|-$)/g, '');
+
+    const columns = [
+      { key: 'full_name', label: 'Student', enabled: true },
+      { key: 'roll_number', label: 'Roll Number', enabled: fields.rollNumber },
+      { key: 'section', label: 'Section', enabled: fields.section },
+      { key: 'email', label: 'Email', enabled: fields.email },
+      { key: 'present', label: 'Present Sessions', enabled: fields.presentSessions },
+      { key: 'total', label: 'Total Sessions', enabled: fields.totalSessions },
+      { key: 'rate', label: 'Attendance Rate', enabled: fields.rate },
+      { key: 'status', label: 'Eligibility Status', enabled: fields.statusFlag }
+    ].filter(c => c.enabled);
+
+    const header = columns.map(c => c.label);
+    const rows = filteredRows.map(r => columns.map(c => {
+      if (c.key === 'status') return r.atRisk ? 'At Risk' : 'Eligible';
+      if (c.key === 'rate') return `${r.rate}%`;
+      return r[c.key];
+    }));
+
+    if (format === 'csv') {
+      const csv = buildCsv(header, rows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      downloadBlob(blob, `${safeCourse}-export.csv`);
+      push('success', `CSV downloaded. ${filteredRows.length} records exported.`);
+      return;
+    }
+
+    const lines = [
+      `Course: ${activeCourse?.course_name || 'Course'}`,
+      `Exported Records: ${filteredRows.length}`,
+      '',
+      header.join(' | '),
+      ...rows.map(r => r.join(' | '))
+    ];
+    const pdfBlob = createSimplePdf(lines, { title: 'Attendance Export' });
+    downloadBlob(pdfBlob, `${safeCourse}-export.pdf`);
+    push('success', `PDF downloaded. ${filteredRows.length} records exported.`);
   };
 
   const handleSendWarnings = () => {

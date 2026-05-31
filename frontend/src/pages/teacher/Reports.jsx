@@ -8,7 +8,9 @@ import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
 import { useFetch } from '../../hooks/useFetch';
+import { useNotification } from '../../context/NotificationContext';
 import { todayISO } from '../../utils/dateHelpers';
+import { buildCsv, createSimplePdf, downloadBlob } from '../../utils/exportUtils';
 
 /**
  * Reports — /teacher/reports
@@ -22,10 +24,12 @@ import { todayISO } from '../../utils/dateHelpers';
  * DB: attendance GROUP BY class_date, course_id; joined with courses, students
  */
 export default function Reports() {
+  const { push } = useNotification();
   const [reportType, setReportType]     = useState('weekly');
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [dateRange, setDateRange]       = useState({ from: '', to: todayISO() });
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exporting, setExporting] = useState(null);
 
   const { data: courses } = useFetch('/teacher/courses');
 
@@ -35,6 +39,62 @@ export default function Reports() {
   const { data: reportData, isLoading } = useFetch(reportUrl);
 
   const REPORT_TYPES = ['daily', 'weekly', 'monthly'];
+
+  const handleExport = (format) => {
+    if (!selectedCourse) {
+      push('warning', 'Please select a course to export.');
+      return;
+    }
+    if (!reportData?.rows || reportData.rows.length === 0) {
+      push('warning', 'No report data available to export.');
+      return;
+    }
+
+    const courseName = reportData?.course?.course_name || `course-${selectedCourse}`;
+    const safeCourse = courseName.replace(/[^a-z0-9]+/gi, '-').replace(/(^-|-$)/g, '');
+    const rangeLabel = dateRange.from && dateRange.to ? `${dateRange.from}_to_${dateRange.to}` : 'all';
+    const fileBase = `${safeCourse || 'attendance'}-${reportType}-${rangeLabel}`;
+
+    if (format === 'csv') {
+      setExporting('csv');
+      const headers = ['Student', 'Roll No.', 'Section', 'Present', 'Absent', 'Total', 'Rate (%)'];
+      const rows = reportData.rows.map((r) => ([
+        r.full_name,
+        r.roll_number,
+        r.section,
+        r.present,
+        r.absent,
+        r.total,
+        r.rate,
+      ]));
+      const csv = buildCsv(headers, rows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      downloadBlob(blob, `${fileBase}.csv`);
+      push('success', 'CSV report downloaded.');
+      setExportModalOpen(false);
+      setExporting(null);
+      return;
+    }
+
+    if (format === 'pdf') {
+      setExporting('pdf');
+      const lines = [
+        `Course: ${courseName}`,
+        `Report Type: ${reportType}`,
+        `Date Range: ${dateRange.from && dateRange.to ? `${dateRange.from} - ${dateRange.to}` : 'All'}`,
+        '',
+        'Student | Roll No. | Section | Present | Absent | Total | Rate (%)',
+        ...reportData.rows.map((r) =>
+          `${r.full_name} | ${r.roll_number} | ${r.section} | ${r.present} | ${r.absent} | ${r.total} | ${r.rate}`
+        ),
+      ];
+      const pdfBlob = createSimplePdf(lines, { title: 'Attendance Report' });
+      downloadBlob(pdfBlob, `${fileBase}.pdf`);
+      push('success', 'PDF report downloaded.');
+      setExportModalOpen(false);
+      setExporting(null);
+    }
+  };
 
   return (
     <PageWrapper
@@ -129,8 +189,25 @@ export default function Reports() {
         footer={
           <>
             <Button variant="secondary" size="sm" onClick={() => setExportModalOpen(false)}>Cancel</Button>
-            <Button id="export-pdf-btn"  size="sm" variant="primary">Download PDF</Button>
-            <Button id="export-csv-btn"  size="sm" variant="secondary" leftIcon={<Download className="w-4 h-4" />}>Download CSV</Button>
+            <Button
+              id="export-pdf-btn"
+              size="sm"
+              variant="primary"
+              loading={exporting === 'pdf'}
+              onClick={() => handleExport('pdf')}
+            >
+              Download PDF
+            </Button>
+            <Button
+              id="export-csv-btn"
+              size="sm"
+              variant="secondary"
+              leftIcon={<Download className="w-4 h-4" />}
+              loading={exporting === 'csv'}
+              onClick={() => handleExport('csv')}
+            >
+              Download CSV
+            </Button>
             <Button id="export-email-btn" size="sm" variant="ghost" leftIcon={<Mail className="w-4 h-4" />}>Email Report</Button>
           </>
         }

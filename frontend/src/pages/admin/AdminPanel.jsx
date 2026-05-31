@@ -81,11 +81,21 @@ export default function AdminPanel() {
 
   // Form Creation states
   const [courseModalOpen, setCourseModalOpen] = useState(false);
-  const [newCourse, setNewCourse] = useState({ course_name: '', credit_hours: 3, teacher_id: 1 });
+  const [editingCourseId, setEditingCourseId] = useState(null);
+  const [newCourse, setNewCourse] = useState({
+    course_name: '',
+    credit_hours: 3,
+    teacher_id: '',
+    department: '',
+    semester: '',
+    section: '',
+    co_teacher_ids: []
+  });
 
   const [slotModalOpen, setSlotModalOpen] = useState(false);
   const [newSlot, setNewSlot] = useState({ 
-    course_id: 1, 
+    course_id: 1,
+    teacher_id: '',
     day_of_week: 'Mon', 
     start_time: '08:00', 
     end_time: '09:30', 
@@ -94,21 +104,56 @@ export default function AdminPanel() {
     longitude: 72.814522 
   });
 
+  const [teacherModalOpen, setTeacherModalOpen] = useState(false);
+  const [teacherForm, setTeacherForm] = useState({
+    teacher_id: '',
+    full_name: '',
+    email: '',
+    department: ''
+  });
+
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [newEnrollment, setNewEnrollment] = useState({ student_id: '', course_id: '' });
 
   // Initialize dropdown selectors once lists load
   useEffect(() => {
-    if (teachersList.length > 0) {
+    if (teachersList.length > 0 && !newCourse.teacher_id) {
       setNewCourse(prev => ({ ...prev, teacher_id: teachersList[0].teacher_id }));
     }
-  }, [teachersList]);
+  }, [teachersList, newCourse.teacher_id]);
 
   useEffect(() => {
     if (coursesList.length > 0) {
-      setNewSlot(prev => ({ ...prev, course_id: coursesList[0].course_id }));
+      setNewSlot(prev => ({
+        ...prev,
+        course_id: prev.course_id || coursesList[0].course_id
+      }));
     }
   }, [coursesList]);
+
+  const getCourseTeacherIds = (courseId) => {
+    const course = coursesList.find(c => c.course_id === Number(courseId));
+    if (!course) return [];
+    const ids = new Set();
+    if (course.teacher_id) ids.add(course.teacher_id);
+    if (Array.isArray(course.teacher_ids)) {
+      course.teacher_ids.forEach(id => ids.add(id));
+    }
+    if (Array.isArray(course.co_teachers)) {
+      course.co_teachers.forEach(t => ids.add(t.teacher_id));
+    }
+    return Array.from(ids);
+  };
+
+  useEffect(() => {
+    const teacherIds = getCourseTeacherIds(newSlot.course_id);
+    const nextTeacherId = teacherIds.length > 0
+      ? teacherIds[0]
+      : (teachersList[0]?.teacher_id || '');
+    if (nextTeacherId && newSlot.teacher_id !== nextTeacherId) {
+      setNewSlot(prev => ({ ...prev, teacher_id: nextTeacherId }));
+    }
+  }, [newSlot.course_id, coursesList, teachersList]);
 
   useEffect(() => {
     if (studentsList.length > 0 && coursesList.length > 0) {
@@ -145,45 +190,112 @@ export default function AdminPanel() {
     }
   }, [activeTab, searchQuery, coursesList, timetableList, teachersList, studentsList, enrollmentsList]);
 
+  const slotTeacherOptions = useMemo(() => {
+    const teacherIds = getCourseTeacherIds(newSlot.course_id);
+    if (teacherIds.length === 0) return teachersList;
+    return teachersList.filter(t => teacherIds.includes(t.teacher_id));
+  }, [newSlot.course_id, coursesList, teachersList]);
+
   // Actions
-  const handleAddCourse = async (e) => {
+  const resetCourseForm = () => {
+    setNewCourse({
+      course_name: '',
+      credit_hours: 3,
+      teacher_id: teachersList[0]?.teacher_id || '',
+      department: '',
+      semester: '',
+      section: '',
+      co_teacher_ids: []
+    });
+  };
+
+  const openCreateCourse = () => {
+    setEditingCourseId(null);
+    resetCourseForm();
+    setCourseModalOpen(true);
+  };
+
+  const openEditCourse = (course) => {
+    setEditingCourseId(course.course_id);
+    setNewCourse({
+      course_name: course.course_name || '',
+      credit_hours: course.credit_hours || 3,
+      teacher_id: course.teacher_id || teachersList[0]?.teacher_id || '',
+      department: course.department || '',
+      semester: course.semester ?? '',
+      section: course.section || '',
+      co_teacher_ids: (course.teacher_ids || [])
+        .filter(id => Number(id) !== Number(course.teacher_id))
+    });
+    setCourseModalOpen(true);
+  };
+
+  const handleSaveCourse = async (e) => {
     e.preventDefault();
     if (!newCourse.course_name.trim()) {
       push('warning', 'Please enter a valid course name.');
       return;
     }
+    if (!newCourse.teacher_id) {
+      push('warning', 'Please select a primary instructor.');
+      return;
+    }
+
+    const payload = {
+      course_name: newCourse.course_name.trim(),
+      credit_hours: Number(newCourse.credit_hours),
+      teacher_id: Number(newCourse.teacher_id),
+      department: newCourse.department?.trim() || null,
+      semester: newCourse.semester ? Number(newCourse.semester) : null,
+      section: newCourse.section?.trim() || null,
+      teacher_ids: [
+        Number(newCourse.teacher_id),
+        ...newCourse.co_teacher_ids.map(Number)
+      ].filter(Boolean)
+    };
 
     if (DEV_MODE) {
-      const created = {
-        course_id: coursesList.length + 1,
-        ...newCourse,
-        teacher_id: Number(newCourse.teacher_id)
-      };
-      setCoursesList(prev => [...prev, created]);
-      push('success', `Course '${newCourse.course_name}' created successfully!`);
-      setNewCourse({ course_name: '', credit_hours: 3, teacher_id: teachersList[0]?.teacher_id || 1 });
+      if (editingCourseId) {
+        setCoursesList(prev => prev.map(c => (
+          c.course_id === editingCourseId
+            ? { ...c, ...payload, teacher_ids: payload.teacher_ids }
+            : c
+        )));
+        push('success', `Course '${payload.course_name}' updated successfully!`);
+      } else {
+        const created = {
+          course_id: coursesList.length + 1,
+          ...payload,
+          enrolled_count: 0
+        };
+        setCoursesList(prev => [...prev, created]);
+        push('success', `Course '${payload.course_name}' created successfully!`);
+      }
+      resetCourseForm();
       setCourseModalOpen(false);
       return;
     }
 
-    // Production Mode - POST /api/admin/courses
     try {
-      const res = await fetch('/api/admin/courses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(newCourse)
-      });
+      const res = await fetch(
+        editingCourseId ? `/api/admin/courses/${editingCourseId}` : '/api/admin/courses',
+        {
+          method: editingCourseId ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        }
+      );
       if (!res.ok) {
         const body = await res.json();
-        throw new Error(body.message || 'Failed to create course');
+        throw new Error(body.message || 'Failed to save course');
       }
       const data = await res.json();
-      push('success', data.message || `Course '${newCourse.course_name}' created successfully!`);
+      push('success', data.message || `Course '${payload.course_name}' saved successfully!`);
       refetchCourses();
-      setNewCourse({ course_name: '', credit_hours: 3, teacher_id: teachersList[0]?.teacher_id || 1 });
+      resetCourseForm();
       setCourseModalOpen(false);
     } catch (err) {
       push('error', err.message);
@@ -196,12 +308,17 @@ export default function AdminPanel() {
       push('warning', 'Please enter a valid room location.');
       return;
     }
+    if (!newSlot.teacher_id) {
+      push('warning', 'Please select an instructor for this slot.');
+      return;
+    }
 
     if (DEV_MODE) {
       const created = {
         slot_id: timetableList.length + 1,
         ...newSlot,
         course_id: Number(newSlot.course_id),
+        teacher_id: Number(newSlot.teacher_id),
         latitude: Number(newSlot.latitude),
         longitude: Number(newSlot.longitude)
       };
@@ -219,7 +336,13 @@ export default function AdminPanel() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(newSlot)
+        body: JSON.stringify({
+          ...newSlot,
+          course_id: Number(newSlot.course_id),
+          teacher_id: Number(newSlot.teacher_id),
+          latitude: Number(newSlot.latitude),
+          longitude: Number(newSlot.longitude)
+        })
       });
       if (!res.ok) {
         const body = await res.json();
@@ -280,6 +403,62 @@ export default function AdminPanel() {
       push('success', data.message || 'Student enrolled in course successfully!');
       refetchEnrollments();
       setEnrollModalOpen(false);
+    } catch (err) {
+      push('error', err.message);
+    }
+  };
+
+  const openEditTeacher = (teacher) => {
+    setTeacherForm({
+      teacher_id: teacher.teacher_id,
+      full_name: teacher.full_name || '',
+      email: teacher.email || '',
+      department: teacher.department || ''
+    });
+    setTeacherModalOpen(true);
+  };
+
+  const handleSaveTeacher = async (e) => {
+    e.preventDefault();
+    if (!teacherForm.full_name.trim() || !teacherForm.email.trim()) {
+      push('warning', 'Please provide full name and email.');
+      return;
+    }
+
+    if (DEV_MODE) {
+      setTeachersList(prev => prev.map(t => (
+        t.teacher_id === teacherForm.teacher_id
+          ? { ...t, full_name: teacherForm.full_name, email: teacherForm.email, department: teacherForm.department }
+          : t
+      )));
+      push('success', 'Faculty profile updated successfully!');
+      setTeacherModalOpen(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/users/${teacherForm.teacher_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          full_name: teacherForm.full_name,
+          email: teacherForm.email,
+          department: teacherForm.department,
+          role: 'teacher'
+        })
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || 'Failed to update faculty.');
+      }
+      const data = await res.json().catch(() => ({}));
+      push('success', data.message || 'Faculty profile updated successfully!');
+      refetchTeachers();
+      refetchCourses();
+      setTeacherModalOpen(false);
     } catch (err) {
       push('error', err.message);
     }
@@ -356,7 +535,7 @@ export default function AdminPanel() {
         <div className="flex gap-2">
           {activeTab === 'courses' && (
             <Button 
-              onClick={() => setCourseModalOpen(true)} 
+              onClick={openCreateCourse} 
               variant="primary" 
               size="sm" 
               leftIcon={<Plus className="w-4 h-4" />}
@@ -469,23 +648,41 @@ export default function AdminPanel() {
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider">
                     <th className="px-4 py-3 text-left">Course Name</th>
                     <th className="px-4 py-3 text-center">Credit Hours</th>
-                    <th className="px-4 py-3 text-left">Assigned Instructor</th>
+                    <th className="px-4 py-3 text-left">Assigned Instructor(s)</th>
+                    <th className="px-4 py-3 text-left">Class</th>
                     <th className="px-4 py-3 text-center">Enrolled Count</th>
                     <th className="px-4 py-3 w-20" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredData.map(c => {
-                    const teacher = teachersList.find(t => t.teacher_id === c.teacher_id);
+                    const teacherIds = c.teacher_ids?.length
+                      ? c.teacher_ids
+                      : (c.teacher_id ? [c.teacher_id] : []);
+                    const assignedTeachers = teachersList.filter(t => teacherIds.includes(t.teacher_id));
+                    const primaryTeacher = assignedTeachers.find(t => t.teacher_id === c.teacher_id);
+                    const coTeachers = assignedTeachers.filter(t => t.teacher_id !== c.teacher_id);
                     return (
                       <tr key={c.course_id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 font-semibold text-slate-900">{c.course_name}</td>
                         <td className="px-4 py-3 text-center font-bold text-slate-800">{c.credit_hours} cr</td>
-                        <td className="px-4 py-3 font-medium text-slate-600">{teacher?.full_name || c.teacher_name || 'Unassigned'}</td>
+                        <td className="px-4 py-3 font-medium text-slate-600">
+                          <div className="text-sm">{primaryTeacher?.full_name || c.teacher_name || 'Unassigned'}</div>
+                          {coTeachers.length > 0 && (
+                            <div className="text-[10px] text-slate-400">
+                              Co: {coTeachers.map(t => t.full_name).join(', ')}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500">
+                          <div>{c.department || '—'}</div>
+                          <div>Sem {c.semester ?? '—'} · Sec {c.section || '—'}</div>
+                        </td>
                         <td className="px-4 py-3 text-center">
                           <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-0.5 rounded-full border border-slate-200">{c.enrolled_count || 0} students</span>
                         </td>
                         <td className="px-4 py-3 flex gap-1 justify-end">
+                          <button onClick={() => openEditCourse(c)} className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"><Edit2 size={15} /></button>
                           <button onClick={() => handleDeleteItem(c.course_id, 'course')} className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"><Trash2 size={15} /></button>
                         </td>
                       </tr>
@@ -500,6 +697,7 @@ export default function AdminPanel() {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider">
                     <th className="px-4 py-3 text-left">Scheduled Course</th>
+                    <th className="px-4 py-3 text-left">Instructor</th>
                     <th className="px-4 py-3 text-center">Day</th>
                     <th className="px-4 py-3 text-center">Class Time</th>
                     <th className="px-4 py-3 text-left">Room Location</th>
@@ -510,9 +708,11 @@ export default function AdminPanel() {
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredData.map(s => {
                     const c = coursesList.find(item => item.course_id === s.course_id);
+                    const teacher = teachersList.find(t => t.teacher_id === s.teacher_id);
                     return (
                       <tr key={s.slot_id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 font-semibold text-slate-900">{c?.course_name || s.course_name || 'Unknown Course'}</td>
+                        <td className="px-4 py-3 text-slate-600">{teacher?.full_name || s.teacher_name || '—'}</td>
                         <td className="px-4 py-3 text-center">
                           <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{s.day_of_week}</span>
                         </td>
@@ -539,11 +739,17 @@ export default function AdminPanel() {
                     <th className="px-4 py-3 text-left">Email Address</th>
                     <th className="px-4 py-3 text-left">Department</th>
                     <th className="px-4 py-3 text-left">Assigned Courses</th>
+                    <th className="px-4 py-3 w-16" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredData.map(t => {
-                    const assigned = coursesList.filter(item => item.teacher_id === t.teacher_id);
+                    const assigned = coursesList.filter(item => {
+                      if (item.teacher_id === t.teacher_id) return true;
+                      if (Array.isArray(item.teacher_ids) && item.teacher_ids.includes(t.teacher_id)) return true;
+                      if (Array.isArray(item.co_teachers) && item.co_teachers.some(ct => ct.teacher_id === t.teacher_id)) return true;
+                      return false;
+                    });
                     return (
                       <tr key={t.teacher_id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 font-semibold text-slate-900">{t.full_name}</td>
@@ -559,6 +765,9 @@ export default function AdminPanel() {
                               ))
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => openEditTeacher(t)} className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"><Edit2 size={15} /></button>
                         </td>
                       </tr>
                     );
@@ -625,11 +834,11 @@ export default function AdminPanel() {
       {courseModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden animate-scale-up">
-            <form onSubmit={handleAddCourse}>
+            <form onSubmit={handleSaveCourse}>
               <div className="p-6 space-y-4">
                 <div className="flex items-center gap-2 text-rose-800 font-bold border-b border-slate-100 pb-3">
                   <BookOpen className="w-5 h-5" />
-                  <span>Create Academic Course</span>
+                  <span>{editingCourseId ? 'Update Academic Course' : 'Create Academic Course'}</span>
                 </div>
 
                 <div className="space-y-3">
@@ -642,12 +851,48 @@ export default function AdminPanel() {
                       value={newCourse.course_name}
                       onChange={(e) => setNewCourse(prev => ({ ...prev, course_name: e.target.value }))}
                       className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none"
-                    />
-                  </div>
+                      />
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Credit Hours</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Department / Program</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Computer Science"
+                        value={newCourse.department}
+                        onChange={(e) => setNewCourse(prev => ({ ...prev, department: e.target.value }))}
+                        className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Semester</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="12"
+                          placeholder="e.g. 5"
+                          value={newCourse.semester}
+                          onChange={(e) => setNewCourse(prev => ({ ...prev, semester: e.target.value }))}
+                          className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Section</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. A"
+                          value={newCourse.section}
+                          onChange={(e) => setNewCourse(prev => ({ ...prev, section: e.target.value }))}
+                          className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Credit Hours</label>
                       <select
                         value={newCourse.credit_hours}
                         onChange={(e) => setNewCourse(prev => ({ ...prev, credit_hours: Number(e.target.value) }))}
@@ -658,26 +903,54 @@ export default function AdminPanel() {
                         <option value="3">3 Credit Hours</option>
                         <option value="4">4 Credit Hours</option>
                       </select>
-                    </div>
+                      </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assigned Teacher</label>
-                      <select
-                        value={newCourse.teacher_id}
-                        onChange={(e) => setNewCourse(prev => ({ ...prev, teacher_id: Number(e.target.value) }))}
-                        className="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none"
-                      >
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Primary Instructor</label>
+                        <select
+                          value={newCourse.teacher_id}
+                          onChange={(e) => {
+                            const nextId = Number(e.target.value);
+                            setNewCourse(prev => ({
+                              ...prev,
+                              teacher_id: nextId,
+                              co_teacher_ids: prev.co_teacher_ids.filter(id => Number(id) !== nextId)
+                            }));
+                          }}
+                          className="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                        >
                         {teachersList.map(t => (
                           <option key={t.teacher_id} value={t.teacher_id}>{t.full_name}</option>
                         ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Co-Teachers (Optional)</label>
+                      <select
+                        multiple
+                        value={newCourse.co_teacher_ids}
+                        onChange={(e) => setNewCourse(prev => ({
+                          ...prev,
+                          co_teacher_ids: Array.from(e.target.selectedOptions, opt => Number(opt.value))
+                        }))}
+                        className="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none h-28"
+                      >
+                        {teachersList
+                          .filter(t => Number(t.teacher_id) !== Number(newCourse.teacher_id))
+                          .map(t => (
+                            <option key={t.teacher_id} value={t.teacher_id}>{t.full_name}</option>
+                          ))}
                       </select>
                     </div>
                   </div>
-                </div>
 
                 <div className="flex gap-2 justify-end pt-3 border-t border-slate-100">
                   <Button type="button" variant="secondary" size="sm" onClick={() => setCourseModalOpen(false)}>Cancel</Button>
-                  <Button type="submit" variant="primary" size="sm" className="bg-rose-600 hover:bg-rose-700 text-white">Create Course</Button>
+                  <Button type="submit" variant="primary" size="sm" className="bg-rose-600 hover:bg-rose-700 text-white">
+                    {editingCourseId ? 'Update Course' : 'Create Course'}
+                  </Button>
                 </div>
               </div>
             </form>
@@ -706,6 +979,19 @@ export default function AdminPanel() {
                     >
                       {coursesList.map(c => (
                         <option key={c.course_id} value={c.course_id}>{c.course_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instructor</label>
+                    <select
+                      value={newSlot.teacher_id}
+                      onChange={(e) => setNewSlot(prev => ({ ...prev, teacher_id: Number(e.target.value) }))}
+                      className="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    >
+                      {slotTeacherOptions.map(t => (
+                        <option key={t.teacher_id} value={t.teacher_id}>{t.full_name}</option>
                       ))}
                     </select>
                   </div>
@@ -840,6 +1126,59 @@ export default function AdminPanel() {
                 <div className="flex gap-2 justify-end pt-3 border-t border-slate-100">
                   <Button type="button" variant="secondary" size="sm" onClick={() => setEnrollModalOpen(false)}>Cancel</Button>
                   <Button type="submit" variant="primary" size="sm" className="bg-rose-600 hover:bg-rose-700 text-white">Enroll Student</Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Faculty Modal ─────────────────────────────────────────────── */}
+      {teacherModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden animate-scale-up">
+            <form onSubmit={handleSaveTeacher}>
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-2 text-rose-800 font-bold border-b border-slate-100 pb-3">
+                  <Users className="w-5 h-5" />
+                  <span>Edit Faculty Profile</span>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={teacherForm.full_name}
+                      onChange={(e) => setTeacherForm(prev => ({ ...prev, full_name: e.target.value }))}
+                      className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      value={teacherForm.email}
+                      onChange={(e) => setTeacherForm(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Department / Program</label>
+                    <input
+                      type="text"
+                      value={teacherForm.department}
+                      onChange={(e) => setTeacherForm(prev => ({ ...prev, department: e.target.value }))}
+                      className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end pt-3 border-t border-slate-100">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setTeacherModalOpen(false)}>Cancel</Button>
+                  <Button type="submit" variant="primary" size="sm" className="bg-rose-600 hover:bg-rose-700 text-white">Save Changes</Button>
                 </div>
               </div>
             </form>

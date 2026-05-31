@@ -1,0 +1,21 @@
+For now I have few changes in mind:
+Every department/Program and section will have a different timetable
+
+Student:
+Account setting not working
+Department/Program
+Student should be assigned to the courses based on their department/Program and section
+His/her timetable should also be displayed based on its department/Program and section
+student should have the ability to download its attendence locally in laptop with a single button
+
+Teacher:
+Department/Program should be assigned to the teacher by admin
+Mark Absent not working in Class roster
+Export/Download pdf and csv not downloading in pc
+Accout setting not working
+
+Admin:
+Setting not working
+Facult or course should be edited by the admin (course assign, etc)
+Multiple teacher should be assigned to a single course
+Multiple classes could have a single course at the same time but different teachers

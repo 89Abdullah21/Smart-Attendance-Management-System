@@ -32,13 +32,13 @@ export const getKpiStats = (courseId, from, to) =>
   api.get(`/teacher/kpi/${courseId}`, { params: { from, to } }).then((r) => r.data);
 
 /**
- * exportReport — trigger report generation and return download URL or blob.
- * GET /api/teacher/report/:courseId?format=pdf|csv&from=&to=
+ * exportReport — fetch report data for charts and exports.
+ * GET /api/teacher/report/:courseId?type=daily|weekly|monthly&from=&to=
  */
-export const exportReport = (courseId, format, from, to) =>
+export const exportReport = (courseId, type, from, to) =>
   api.get(`/teacher/report/${courseId}`, {
-    params: { format, from, to },
-    responseType: format === 'pdf' ? 'blob' : 'json',
+    params: { type, from, to },
+    responseType: 'json',
   }).then((r) => r.data);
 
 /**

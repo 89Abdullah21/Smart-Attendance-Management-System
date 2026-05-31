@@ -34,6 +34,7 @@ export const PLACEHOLDER_STUDENTS = [
     roll_number: '2021-CS-042',
     section:     'A',
     semester:    5,
+    department:  'Computer Science',
     avatar_initials: 'AJ',
     created_at:  '2021-09-01T08:00:00Z',
   },
@@ -44,6 +45,7 @@ export const PLACEHOLDER_STUDENTS = [
     roll_number: '2021-CS-017',
     section:     'A',
     semester:    5,
+    department:  'Computer Science',
     avatar_initials: 'SK',
     created_at:  '2021-09-01T08:05:00Z',
   },
@@ -54,6 +56,7 @@ export const PLACEHOLDER_STUDENTS = [
     roll_number: '2021-CS-089',
     section:     'B',
     semester:    5,
+    department:  'Computer Science',
     avatar_initials: 'BR',
     created_at:  '2021-09-02T09:00:00Z',
   },
@@ -64,6 +67,7 @@ export const PLACEHOLDER_STUDENTS = [
     roll_number: '2022-CS-011',
     section:     'A',
     semester:    3,
+    department:  'Software Engineering',
     avatar_initials: 'AS',
     created_at:  '2022-09-01T08:00:00Z',
   },
@@ -74,6 +78,7 @@ export const PLACEHOLDER_STUDENTS = [
     roll_number: '2022-CS-055',
     section:     'B',
     semester:    3,
+    department:  'Software Engineering',
     avatar_initials: 'HT',
     created_at:  '2022-09-01T08:10:00Z',
   },
@@ -84,6 +89,7 @@ export const PLACEHOLDER_STUDENTS = [
     roll_number: '2023-CS-003',
     section:     'A',
     semester:    1,
+    department:  'Information Technology',
     avatar_initials: 'NF',
     created_at:  '2023-09-01T08:00:00Z',
   },
@@ -275,6 +281,7 @@ const DEV_USERS = {
     roll_number: PLACEHOLDER_STUDENTS[0].roll_number,
     section:     PLACEHOLDER_STUDENTS[0].section,
     semester:    PLACEHOLDER_STUDENTS[0].semester,
+    department:  PLACEHOLDER_STUDENTS[0].department,
     avatar_initials: PLACEHOLDER_STUDENTS[0].avatar_initials,
   },
   teacher: {
@@ -425,6 +432,30 @@ export function AuthProvider({ children }) {
   // ── logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(() => _persist(null, null), [_persist]);
 
+  // ── updateSettings ────────────────────────────────────────────────────────
+  const updateSettings = useCallback(async (updatedData) => {
+    if (DEV_MODE) {
+      const newUser = { ...user, ...updatedData };
+      _persist(newUser, token);
+      return newUser;
+    }
+    const res = await fetch('/api/auth/settings', {
+      method:  'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body:    JSON.stringify(updatedData),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update settings');
+    }
+    const { user: updatedUser } = await res.json();
+    _persist(updatedUser, token);
+    return updatedUser;
+  }, [user, token, _persist]);
+
   // ── DEV ONLY: instant role switch ─────────────────────────────────────────
   /** Immediately swap the active session to another role without credentials. */
   const devSwitchRole = useCallback((role) => {
@@ -500,6 +531,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    updateSettings,
     devSwitchRole,   // DEV_MODE only
 
     // ── Placeholder data (available in DEV_MODE) ─────────────
