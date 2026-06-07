@@ -265,4 +265,15 @@ router.post('/logout', (req, res) => {
   res.json({ message: 'Session logged out and cleared.' });
 });
 
+// ── 5. PUBLIC DEPARTMENTS LIST (for registration dropdown) ───────────────────
+router.get('/departments', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT department_id, department_name FROM departments ORDER BY department_name ASC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Departments Fetch Error:', err);
+    res.status(500).json({ message: 'Failed to retrieve departments.' });
+  }
+});
+
 module.exports = router;

@@ -17,6 +17,14 @@ DROP TABLE IF EXISTS timetable;
 DROP TABLE IF EXISTS enrollments;
 DROP TABLE IF EXISTS courses;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS departments;
+
+-- ── DEPARTMENTS TABLE ──────────────────────────────────────────────────────
+CREATE TABLE departments (
+    department_id INT AUTO_INCREMENT PRIMARY KEY,
+    department_name VARCHAR(100) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── 1. USERS TABLE ────────────────────────────────────────────────────────────
 -- Unified table for students, teachers, and admins.
@@ -137,6 +145,14 @@ CREATE INDEX idx_attendance_date    ON attendance(class_date);
 -- Insert Admin
 INSERT INTO users (full_name, email, password_hash, role)
 VALUES ('System Admin', 'admin@uni.edu', '$2a$10$XSEUAPwU9CJuE5z0aML1nOivSNRzBqpIxP4RCDa7l8hny8OEdGIVi', 'admin');
+
+-- Insert Departments
+INSERT INTO departments (department_name) VALUES 
+('Computer Science'),
+('Electrical Engineering'),
+('Mechanical Engineering'),
+('Civil Engineering'),
+('Business Administration');
 
 -- Insert Teachers
 INSERT INTO users (full_name, email, password_hash, role, department)

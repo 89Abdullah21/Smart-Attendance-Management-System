@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Mail, Lock, User, Hash, BookOpen, UserPlus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mail, Lock, User, Hash, BookOpen, UserPlus, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -14,8 +14,8 @@ const ROLE_TABS = [
 
 /**
  * RegisterForm — Tabbed student / teacher registration.
- * Student fields: full_name, email, password, roll_number, section, semester
- * Teacher fields: full_name, email, password, department
+ * Student fields: full_name, email, password, roll_number, section, semester, department (dropdown)
+ * Teacher fields: full_name, email, password, department (dropdown)
  */
 export default function RegisterForm() {
   const { register } = useAuth();
@@ -26,6 +26,27 @@ export default function RegisterForm() {
   const [form, setForm]     = useState({});
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Fetch departments from backend (public endpoint)
+  const [departments, setDepartments] = useState([]);
+  const [deptLoading, setDeptLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const res = await fetch('/api/auth/departments');
+        if (res.ok) {
+          const data = await res.json();
+          setDepartments(data);
+        }
+      } catch (err) {
+        console.error('Failed to load departments:', err);
+      } finally {
+        setDeptLoading(false);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -81,12 +102,80 @@ export default function RegisterForm() {
               <Input id="reg-section"  label="Section"   type="text"   placeholder="A"  value={form.section  ?? ''} onChange={set('section')}  error={errors.section} />
               <Input id="reg-semester" label="Semester"  type="number" placeholder="1"  value={form.semester ?? ''} onChange={set('semester')} error={errors.semester} min={1} max={8} />
             </div>
-            <Input id="reg-dept" label="Department / Program" type="text" placeholder="Computer Science" value={form.department ?? ''} onChange={set('department')} error={errors.department} leftIcon={<BookOpen className="w-4 h-4" />} />
+            {/* Department dropdown for student */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="reg-dept" className="text-sm font-medium text-slate-700">Department / Program</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <BookOpen className="w-4 h-4" />
+                </span>
+                <select
+                  id="reg-dept"
+                  value={form.department ?? ''}
+                  onChange={set('department')}
+                  disabled={deptLoading}
+                  className={`
+                    w-full rounded-lg border px-3 py-2 text-sm text-slate-900 pl-9
+                    focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                    disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed
+                    transition-colors bg-white appearance-none cursor-pointer
+                    ${errors.department
+                      ? 'border-red-400 bg-red-50 focus:ring-red-400'
+                      : 'border-slate-300 hover:border-slate-400'}
+                  `}
+                >
+                  <option value="">{deptLoading ? 'Loading departments...' : '— Select Department —'}</option>
+                  {departments.map((d) => (
+                    <option key={d.department_id} value={d.department_name}>{d.department_name}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.department && (
+                <p className="flex items-center gap-1 text-xs text-red-600">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  {errors.department}
+                </p>
+              )}
+            </div>
           </>
         )}
 
         {role === 'teacher' && (
-        <Input id="reg-dept" label="Department" type="text" placeholder="Computer Science" value={form.department ?? ''} onChange={set('department')} error={errors.department} leftIcon={<BookOpen className="w-4 h-4" />} />
+          /* Department dropdown for teacher */
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="reg-dept" className="text-sm font-medium text-slate-700">Department</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <BookOpen className="w-4 h-4" />
+              </span>
+              <select
+                id="reg-dept"
+                value={form.department ?? ''}
+                onChange={set('department')}
+                disabled={deptLoading}
+                className={`
+                  w-full rounded-lg border px-3 py-2 text-sm text-slate-900 pl-9
+                  focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                  disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed
+                  transition-colors bg-white appearance-none cursor-pointer
+                  ${errors.department
+                    ? 'border-red-400 bg-red-50 focus:ring-red-400'
+                    : 'border-slate-300 hover:border-slate-400'}
+                `}
+              >
+                <option value="">{deptLoading ? 'Loading departments...' : '— Select Department —'}</option>
+                {departments.map((d) => (
+                  <option key={d.department_id} value={d.department_name}>{d.department_name}</option>
+                ))}
+              </select>
+            </div>
+            {errors.department && (
+              <p className="flex items-center gap-1 text-xs text-red-600">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {errors.department}
+              </p>
+            )}
+          </div>
       )}
 
       <Button id="register-submit-btn" type="submit" fullWidth loading={loading} leftIcon={<UserPlus className="w-4 h-4" />}>

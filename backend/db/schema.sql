@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS timetable;
 DROP TABLE IF EXISTS enrollments;
 DROP TABLE IF EXISTS courses;
 DROP TABLE IF EXISTS users;
+SELECT * FROM users;
 
 -- ── 1. USERS TABLE ────────────────────────────────────────────────────────────
 -- Unified table for students, teachers, and admins.

@@ -498,4 +498,57 @@ router.delete('/enrollments/:enrollmentId', async (req, res) => {
   }
 });
 
+// ── 5. DEPARTMENTS MANAGEMENT ─────────────────────────────────────────────────
+
+// Get all departments
+router.get('/departments', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT department_id, department_name FROM departments ORDER BY department_name ASC');
+    res.json(rows);
+  } catch (err) {
+    console.error('Admin Departments Fetch Error:', err);
+    res.status(500).json({ message: 'Failed to retrieve departments.' });
+  }
+});
+
+// Create a new department
+router.post('/departments', async (req, res) => {
+  const { department_name } = req.body;
+  if (!department_name || !department_name.trim()) {
+    return res.status(400).json({ message: 'Department name is required.' });
+  }
+  try {
+    const [result] = await db.query(
+      'INSERT INTO departments (department_name) VALUES (?)',
+      [department_name.trim()]
+    );
+    res.status(201).json({
+      department_id: result.insertId,
+      department_name: department_name.trim(),
+      message: 'Department created successfully!'
+    });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ message: 'Department already exists.' });
+    }
+    console.error('Admin Department Creation Error:', err);
+    res.status(500).json({ message: 'Failed to create department.' });
+  }
+});
+
+// Delete a department
+router.delete('/departments/:departmentId', async (req, res) => {
+  const { departmentId } = req.params;
+  try {
+    const [result] = await db.query('DELETE FROM departments WHERE department_id = ?', [departmentId]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Department not found.' });
+    }
+    res.json({ message: 'Department deleted successfully.' });
+  } catch (err) {
+    console.error('Admin Department Deletion Error:', err);
+    res.status(500).json({ message: 'Failed to delete department.' });
+  }
+});
+
 module.exports = router;
