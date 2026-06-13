@@ -70,7 +70,8 @@ router.post('/register', async (req, res) => {
       role === 'student' ? roll_number : null,
       role === 'student' ? section : null,
       role === 'student' ? Number(semester) : null,
-      (role === 'teacher' || role === 'student') ? department : null
+      // Teachers no longer set department on registration — admin assigns it via teacher_departments
+      role === 'student' ? department : null
     ];
 
     const [insertResult] = await db.query(insertQuery, values);
@@ -229,7 +230,8 @@ router.put('/settings', authenticateToken, async (req, res) => {
       role === 'student' ? (roll_number || currentUser.roll_number) : null,
       role === 'student' ? (section || currentUser.section) : null,
       role === 'student' ? (semester !== undefined ? Number(semester) : currentUser.semester) : null,
-      (role === 'teacher' || role === 'student') ? (department || currentUser.department) : null,
+      // Teachers: department is managed by admin via teacher_departments, don't overwrite here
+      role === 'student' ? (department || currentUser.department) : currentUser.department,
       userId
     ];
 
@@ -266,11 +268,34 @@ router.post('/logout', (req, res) => {
 });
 
 // ── 5. PUBLIC DEPARTMENTS LIST (for registration dropdown) ───────────────────
+// Fallback list used when the departments table doesn't exist yet (pre-migration).
+const FALLBACK_DEPARTMENTS = [
+  { department_id: 1,  department_name: 'Computer Science' },
+  { department_id: 2,  department_name: 'Software Engineering' },
+  { department_id: 3,  department_name: 'Information Technology' },
+  { department_id: 4,  department_name: 'Electrical Engineering' },
+  { department_id: 5,  department_name: 'Mechanical Engineering' },
+  { department_id: 6,  department_name: 'Civil Engineering' },
+  { department_id: 7,  department_name: 'Business Administration' },
+  { department_id: 8,  department_name: 'Mathematics' },
+  { department_id: 9,  department_name: 'Physics' },
+  { department_id: 10, department_name: 'Chemistry' },
+];
+
 router.get('/departments', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT department_id, department_name FROM departments ORDER BY department_name ASC');
+    // If the table exists but is empty, still return the fallback list
+    if (rows.length === 0) {
+      return res.json(FALLBACK_DEPARTMENTS);
+    }
     res.json(rows);
   } catch (err) {
+    // If the table doesn't exist yet (ER_NO_SUCH_TABLE), return the built-in fallback list
+    if (err.code === 'ER_NO_SUCH_TABLE') {
+      console.warn('departments table not found — returning built-in fallback list. Run add_departments_table.sql to fix.');
+      return res.json(FALLBACK_DEPARTMENTS);
+    }
     console.error('Departments Fetch Error:', err);
     res.status(500).json({ message: 'Failed to retrieve departments.' });
   }

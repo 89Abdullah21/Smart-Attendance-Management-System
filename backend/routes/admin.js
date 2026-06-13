@@ -316,11 +316,41 @@ router.delete('/timetable/:slotId', async (req, res) => {
 
 // ── 3. USER REGISTRIES (TEACHERS / STUDENTS) ─────────────────────────────────
 
-// Get all faculty members
+// Get all faculty members (includes departments[] array from teacher_departments)
 router.get('/teachers', async (req, res) => {
   try {
-    const query = 'SELECT id AS teacher_id, full_name, email, department, created_at FROM users WHERE role = ? ORDER BY full_name ASC';
-    const [rows] = await db.query(query, ['teacher']);
+    const [rows] = await db.query(
+      'SELECT id AS teacher_id, full_name, email, created_at FROM users WHERE role = ? ORDER BY full_name ASC',
+      ['teacher']
+    );
+
+    // Attach departments[] and assigned course IDs for each teacher
+    for (const teacher of rows) {
+      const [depts] = await db.query(
+        `SELECT d.department_id, d.department_name
+         FROM teacher_departments td
+         JOIN departments d ON d.department_id = td.department_id
+         WHERE td.teacher_id = ?
+         ORDER BY d.department_name ASC`,
+        [teacher.teacher_id]
+      );
+      teacher.departments = depts;
+      // Convenience: comma-joined string for search/display
+      teacher.department = depts.map(d => d.department_name).join(', ');
+
+      const [courses] = await db.query(
+        `SELECT c.course_id
+         FROM courses c
+         WHERE c.teacher_id = ?
+         UNION
+         SELECT ct.course_id
+         FROM course_teachers ct
+         WHERE ct.teacher_id = ?`,
+        [teacher.teacher_id, teacher.teacher_id]
+      );
+      teacher.assigned_course_ids = courses.map(c => c.course_id);
+    }
+
     res.json(rows);
   } catch (err) {
     console.error('Admin Teachers Fetch Error:', err);
@@ -331,7 +361,7 @@ router.get('/teachers', async (req, res) => {
 // Get all students
 router.get('/students', async (req, res) => {
   try {
-    const query = 'SELECT id AS student_id, full_name, email, roll_number, section, semester, created_at FROM users WHERE role = ? ORDER BY full_name ASC';
+    const query = 'SELECT id AS student_id, full_name, email, roll_number, section, semester, department, created_at FROM users WHERE role = ? ORDER BY full_name ASC';
     const [rows] = await db.query(query, ['student']);
     res.json(rows);
   } catch (err) {
@@ -341,9 +371,10 @@ router.get('/students', async (req, res) => {
 });
 
 // Edit any user (PUT /users/:userId)
+// For teachers: accepts department_ids[] and course_ids[] instead of department string
 router.put('/users/:userId', async (req, res) => {
   const { userId } = req.params;
-  const { full_name, email, roll_number, section, semester, department, role } = req.body;
+  const { full_name, email, roll_number, section, semester, department, department_ids, course_ids, role } = req.body;
 
   try {
     const [userRows] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
@@ -351,6 +382,7 @@ router.put('/users/:userId', async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
     const currentUser = userRows[0];
+    const finalRole = role || currentUser.role;
 
     // Check email uniqueness if email is changed
     if (email && email.toLowerCase() !== currentUser.email.toLowerCase()) {
@@ -361,53 +393,85 @@ router.put('/users/:userId', async (req, res) => {
     }
 
     // Check roll number uniqueness if changed
-    if (role === 'student' && roll_number && roll_number !== currentUser.roll_number) {
+    if (finalRole === 'student' && roll_number && roll_number !== currentUser.roll_number) {
       const [rollCheck] = await db.query('SELECT * FROM users WHERE roll_number = ?', [roll_number]);
       if (rollCheck.length > 0) {
         return res.status(400).json({ message: 'Roll number is already registered.' });
       }
     }
 
-    const updateQuery = `
-      UPDATE users SET 
-        full_name = ?,
-        email = ?,
-        roll_number = ?,
-        section = ?,
-        semester = ?,
-        department = ?
-      WHERE id = ?
-    `;
+    // For students we keep single-department; for teachers department col is left as-is (legacy)
+    const deptValue = finalRole === 'student'
+      ? (department || currentUser.department)
+      : currentUser.department; // don't touch legacy col for teachers
 
-    const values = [
-      full_name || currentUser.full_name,
-      email ? email.toLowerCase() : currentUser.email,
-      role === 'student' ? (roll_number || currentUser.roll_number) : null,
-      role === 'student' ? (section || currentUser.section) : null,
-      role === 'student' ? (semester !== undefined ? Number(semester) : currentUser.semester) : null,
-      (role === 'teacher' || role === 'student') ? (department || currentUser.department) : null,
-      userId
-    ];
+    await db.query(
+      `UPDATE users SET full_name = ?, email = ?, roll_number = ?, section = ?, semester = ?, department = ? WHERE id = ?`,
+      [
+        full_name || currentUser.full_name,
+        email ? email.toLowerCase() : currentUser.email,
+        finalRole === 'student' ? (roll_number || currentUser.roll_number) : null,
+        finalRole === 'student' ? (section || currentUser.section) : null,
+        finalRole === 'student' ? (semester !== undefined ? Number(semester) : currentUser.semester) : null,
+        deptValue || null,
+        userId
+      ]
+    );
 
-    await db.query(updateQuery, values);
-
-    // If student class changed, sync enrollments
-    const finalRole = role || currentUser.role;
-    const finalDept = (finalRole === 'student' || finalRole === 'teacher') ? (department || currentUser.department) : null;
-    const finalSem = finalRole === 'student' ? (semester !== undefined ? Number(semester) : currentUser.semester) : null;
-    const finalSec = finalRole === 'student' ? (section || currentUser.section) : null;
-
-    if (finalRole === 'student' && finalDept && finalSem && finalSec) {
-      // Auto enroll matching student
-      const [matchingCourses] = await db.query(
-        'SELECT course_id FROM courses WHERE LOWER(department) = LOWER(?) AND semester = ? AND LOWER(section) = LOWER(?)',
-        [finalDept, Number(finalSem), finalSec]
-      );
-      for (const c of matchingCourses) {
+    // ── Teacher: sync departments via teacher_departments junction table ──
+    if (finalRole === 'teacher' && Array.isArray(department_ids)) {
+      await db.query('DELETE FROM teacher_departments WHERE teacher_id = ?', [userId]);
+      for (const dId of department_ids) {
         await db.query(
-          'INSERT INTO enrollments (student_id, course_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE enrollment_id=enrollment_id',
-          [userId, c.course_id]
+          'INSERT IGNORE INTO teacher_departments (teacher_id, department_id) VALUES (?, ?)',
+          [Number(userId), Number(dId)]
         );
+      }
+    }
+
+    // ── Teacher: sync course assignments ──
+    // course_ids = all courses this teacher should be assigned to (primary + co-teacher)
+    if (finalRole === 'teacher' && Array.isArray(course_ids)) {
+      // Remove as primary teacher where not in new list
+      // Set primary teacher to admin's new choice: replace in course_teachers for co-teacher rows
+      // Strategy: if teacher is currently primary on a course NOT in new list, unassign (set teacher_id to NULL or first co-teacher)
+      // For simplicity: remove from course_teachers for any course not in new list
+      await db.query(
+        'DELETE FROM course_teachers WHERE teacher_id = ? AND course_id NOT IN (?)',
+        course_ids.length > 0 ? [Number(userId), course_ids] : [Number(userId), [0]]
+      );
+
+      // Add as co-teacher for courses in list where not already primary
+      for (const cId of course_ids) {
+        const [courseRow] = await db.query('SELECT teacher_id FROM courses WHERE course_id = ?', [cId]);
+        if (courseRow.length === 0) continue;
+        if (Number(courseRow[0].teacher_id) !== Number(userId)) {
+          // Add to course_teachers as co-teacher
+          await db.query(
+            'INSERT IGNORE INTO course_teachers (course_id, teacher_id) VALUES (?, ?)',
+            [Number(cId), Number(userId)]
+          );
+        }
+        // If already primary, nothing to do
+      }
+    }
+
+    // ── Student: auto-enroll by class match ──
+    if (finalRole === 'student') {
+      const finalDept = department || currentUser.department;
+      const finalSem  = semester !== undefined ? Number(semester) : currentUser.semester;
+      const finalSec  = section || currentUser.section;
+      if (finalDept && finalSem && finalSec) {
+        const [matchingCourses] = await db.query(
+          'SELECT course_id FROM courses WHERE LOWER(department) = LOWER(?) AND semester = ? AND LOWER(section) = LOWER(?)',
+          [finalDept, Number(finalSem), finalSec]
+        );
+        for (const c of matchingCourses) {
+          await db.query(
+            'INSERT INTO enrollments (student_id, course_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE enrollment_id=enrollment_id',
+            [userId, c.course_id]
+          );
+        }
       }
     }
 
@@ -415,6 +479,30 @@ router.put('/users/:userId', async (req, res) => {
   } catch (err) {
     console.error('Admin User Edit Error:', err);
     res.status(500).json({ message: 'Failed to update user profile.' });
+  }
+});
+
+// GET /admin/teacher-courses/:teacherId — courses assigned to a teacher
+router.get('/teacher-courses/:teacherId', async (req, res) => {
+  const { teacherId } = req.params;
+  try {
+    const [rows] = await db.query(
+      `SELECT c.course_id, c.course_name, c.department, c.semester, c.section,
+              IF(c.teacher_id = ?, 'primary', 'co-teacher') AS role_in_course
+       FROM courses c
+       WHERE c.teacher_id = ?
+       UNION
+       SELECT c.course_id, c.course_name, c.department, c.semester, c.section, 'co-teacher'
+       FROM course_teachers ct
+       JOIN courses c ON c.course_id = ct.course_id
+       WHERE ct.teacher_id = ?
+       ORDER BY course_name ASC`,
+      [Number(teacherId), Number(teacherId), Number(teacherId)]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Teacher Courses Fetch Error:', err);
+    res.status(500).json({ message: 'Failed to retrieve teacher courses.' });
   }
 });
 

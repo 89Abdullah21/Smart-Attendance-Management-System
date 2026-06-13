@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { User, Mail, Lock, BookOpen, Hash, Layers, ShieldCheck, Save, Sparkles, AlertCircle } from 'lucide-react';
+import { User, Mail, Lock, BookOpen, Hash, Layers, ShieldCheck, Save, Sparkles, AlertCircle, Building2 } from 'lucide-react';
 import PageWrapper from '../components/layout/PageWrapper';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -25,9 +25,13 @@ export default function AccountSettings() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Fetch departments from backend
+  // Fetch departments from backend (for student dropdown)
   const [departments, setDepartments] = useState([]);
   const [deptLoading, setDeptLoading] = useState(true);
+
+  // Fetch teacher's assigned departments from admin endpoint
+  const [teacherDepts, setTeacherDepts] = useState([]);
+  const [teacherDeptsLoading, setTeacherDeptsLoading] = useState(false);
 
   useEffect(() => {
     const fetchDepartments = async () => {
@@ -45,6 +49,32 @@ export default function AccountSettings() {
     };
     fetchDepartments();
   }, []);
+
+  // For teachers: fetch assigned departments from the teachers list endpoint
+  useEffect(() => {
+    if (user?.role !== 'teacher' || !token) return;
+    const fetchTeacherDepts = async () => {
+      setTeacherDeptsLoading(true);
+      try {
+        const res = await fetch('/api/admin/teachers', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Find this teacher in the list
+          const me = data.find(t => t.teacher_id === user.id);
+          if (me && Array.isArray(me.departments)) {
+            setTeacherDepts(me.departments);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load teacher departments:', err);
+      } finally {
+        setTeacherDeptsLoading(false);
+      }
+    };
+    fetchTeacherDepts();
+  }, [user, token]);
 
   useEffect(() => {
     if (!user) return;
@@ -79,9 +109,7 @@ export default function AccountSettings() {
       if (!form.semester) e.semester = 'Semester is required';
       if (!form.department.trim()) e.department = 'Department/Program is required';
     }
-    if (user?.role === 'teacher') {
-      if (!form.department.trim()) e.department = 'Department is required';
-    }
+    // Teachers: no department validation — admin assigns it
     return e;
   };
 
@@ -96,11 +124,15 @@ export default function AccountSettings() {
       const payload = {
         full_name: form.full_name,
         email: form.email,
-        roll_number: form.roll_number,
-        section: form.section,
-        semester: form.semester,
-        department: form.department,
       };
+
+      // Only send student-specific fields for students
+      if (user?.role === 'student') {
+        payload.roll_number = form.roll_number;
+        payload.section = form.section;
+        payload.semester = form.semester;
+        payload.department = form.department;
+      }
 
       if (form.password.trim() !== '') {
         payload.password = form.password;
@@ -197,53 +229,49 @@ export default function AccountSettings() {
               </div>
             </div>
 
-            {/* Role Specific Fields */}
-            {(user?.role === 'student' || user?.role === 'teacher') && (
+            {/* Student Academic Fields */}
+            {user?.role === 'student' && (
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
                   <Layers className="w-4 h-4 text-indigo-500" />
-                  Academic Scopes
+                  Academic Details
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {user?.role === 'student' && (
-                    <>
-                      <Input
-                        id="sett-roll"
-                        label="Roll Number"
-                        type="text"
-                        value={form.roll_number}
-                        onChange={set('roll_number')}
-                        error={errors.roll_number}
-                        leftIcon={<Hash className="w-4 h-4" />}
-                      />
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input
-                          id="sett-sec"
-                          label="Section"
-                          type="text"
-                          value={form.section}
-                          onChange={set('section')}
-                          error={errors.section}
-                        />
-                        <Input
-                          id="sett-sem"
-                          label="Semester"
-                          type="number"
-                          value={form.semester}
-                          onChange={set('semester')}
-                          error={errors.semester}
-                          min={1}
-                          max={8}
-                        />
-                      </div>
-                    </>
-                  )}
+                  <Input
+                    id="sett-roll"
+                    label="Roll Number"
+                    type="text"
+                    value={form.roll_number}
+                    onChange={set('roll_number')}
+                    error={errors.roll_number}
+                    leftIcon={<Hash className="w-4 h-4" />}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      id="sett-sec"
+                      label="Section"
+                      type="text"
+                      value={form.section}
+                      onChange={set('section')}
+                      error={errors.section}
+                    />
+                    <Input
+                      id="sett-sem"
+                      label="Semester"
+                      type="number"
+                      value={form.semester}
+                      onChange={set('semester')}
+                      error={errors.semester}
+                      min={1}
+                      max={8}
+                    />
+                  </div>
 
-                  {/* Department Dropdown */}
-                  <div className="flex flex-col gap-1.5">
+                  {/* Department Dropdown — students only */}
+                  <div className="flex flex-col gap-1.5 md:col-span-2">
                     <label htmlFor="sett-dept" className="text-sm font-medium text-slate-700">
-                      {user?.role === 'student' ? 'Department / Program' : 'Department'}
+                      Department / Program
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
@@ -277,6 +305,40 @@ export default function AccountSettings() {
                       </p>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Teacher Assigned Departments — read-only, admin manages */}
+            {user?.role === 'teacher' && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <Building2 className="w-4 h-4 text-indigo-500" />
+                  Assigned Departments
+                  <span className="ml-auto text-[10px] font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Managed by Admin</span>
+                </h3>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  {teacherDeptsLoading ? (
+                    <p className="text-xs text-slate-400 italic">Loading assigned departments…</p>
+                  ) : teacherDepts.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No departments assigned yet. Contact your administrator.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {teacherDepts.map((d) => (
+                        <span
+                          key={d.department_id}
+                          className="inline-flex items-center gap-1.5 bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold px-3 py-1 rounded-full"
+                        >
+                          <Building2 className="w-3 h-3" />
+                          {d.department_name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-2">
+                    Department assignments are managed by the system administrator through the Admin Panel.
+                  </p>
                 </div>
               </div>
             )}

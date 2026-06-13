@@ -17,7 +17,7 @@ DROP TABLE IF EXISTS timetable;
 DROP TABLE IF EXISTS enrollments;
 DROP TABLE IF EXISTS courses;
 DROP TABLE IF EXISTS users;
-SELECT * FROM users;
+DROP TABLE IF EXISTS departments;
 
 -- ── 1. USERS TABLE ────────────────────────────────────────────────────────────
 -- Unified table for students, teachers, and admins.
@@ -146,11 +146,31 @@ CREATE INDEX idx_attendance_slot    ON attendance(slot_id);
 CREATE INDEX idx_attendance_course  ON attendance(course_id);
 CREATE INDEX idx_attendance_date    ON attendance(class_date);
 
+-- ── 6. DEPARTMENTS TABLE ──────────────────────────────────────────────────────
+-- Stores available departments for registration dropdown
+CREATE TABLE departments (
+    department_id   INT AUTO_INCREMENT PRIMARY KEY,
+    department_name VARCHAR(150) NOT NULL UNIQUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- =========================================================================
 -- SEED DATA FOR QUICK START / INITIAL LAUNCH
 -- Password for all seed accounts: "password"
 -- Hash: $2a$10$XSEUAPwU9CJuE5z0aML1nOivSNRzBqpIxP4RCDa7l8hny8OEdGIVi
 -- =========================================================================
+
+-- Insert Departments
+INSERT INTO departments (department_name) VALUES
+('Computer Science'),
+('Software Engineering'),
+('Information Technology'),
+('Electrical Engineering'),
+('Mechanical Engineering'),
+('Civil Engineering'),
+('Business Administration'),
+('Mathematics'),
+('Physics'),
+('Chemistry');
 
 -- Insert Admin
 INSERT INTO users (full_name, email, password_hash, role)
