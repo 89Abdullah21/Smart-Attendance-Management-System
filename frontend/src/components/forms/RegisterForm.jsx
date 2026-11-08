@@ -12,6 +12,22 @@ const ROLE_TABS = [
   { id: 'teacher', label: 'Teacher' },
 ];
 
+const DEFAULT_DEPARTMENTS = [
+  'Computer Science',
+  'Software Engineering',
+  'Information Technology',
+  'Electrical Engineering',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Business Administration',
+  'Mathematics',
+  'Physics',
+  'Chemistry',
+].map((department_name, index) => ({
+  department_id: `default-${index + 1}`,
+  department_name,
+}));
+
 /**
  * RegisterForm — Tabbed student / teacher registration.
  * Student fields: full_name, email, password, roll_number, section, semester, department (dropdown)
@@ -28,7 +44,7 @@ export default function RegisterForm() {
   const [loading, setLoading] = useState(false);
 
   // Fetch departments from backend (public endpoint) — only needed for students
-  const [departments, setDepartments] = useState([]);
+  const [departments, setDepartments] = useState(DEFAULT_DEPARTMENTS);
   const [deptLoading, setDeptLoading] = useState(true);
 
   useEffect(() => {
@@ -37,7 +53,11 @@ export default function RegisterForm() {
         const res = await fetch('/api/auth/departments');
         if (res.ok) {
           const data = await res.json();
-          setDepartments(data);
+          if (Array.isArray(data) && data.length > 0) {
+            setDepartments(data);
+          }
+        } else {
+          console.error(`Failed to load departments: ${res.status} ${res.statusText}`);
         }
       } catch (err) {
         console.error('Failed to load departments:', err);
