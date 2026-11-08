@@ -35,6 +35,16 @@ async function syncStudentEnrollments(studentId, department, semester, section) 
 router.post('/register', async (req, res) => {
   const { full_name, email, password, role, roll_number, section, semester, department } = req.body;
 
+  if (!full_name || !email || !password || !role) {
+    return res.status(400).json({ message: 'Full name, email, password, and role are required.' });
+  }
+
+  if (role === 'student' && (!roll_number || !section || !semester || !department)) {
+    return res.status(400).json({
+      message: 'Roll number, section, semester, and department are required for students.'
+    });
+  }
+
   try {
     // Check if user already exists
     const [userCheck] = await db.query('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
@@ -104,6 +114,14 @@ router.post('/register', async (req, res) => {
 
   } catch (err) {
     console.error('Registration Error:', err);
+    if (['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'PROTOCOL_CONNECTION_LOST'].includes(err.code)) {
+      return res.status(503).json({
+        message: 'Registration is temporarily unavailable because the database cannot be reached.'
+      });
+    }
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'A user with this email or roll number already exists.' });
+    }
     res.status(500).json({ message: 'Server error during registration.' });
   }
 });
